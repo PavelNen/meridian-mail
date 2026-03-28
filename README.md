@@ -79,6 +79,11 @@ React (Vite)  ──IPC──  Rust (Tauri)
 - Поиск в UI есть, но не реализован
 - Linux требует запущенного демона Secret Service (например, GNOME Keyring или KWallet)
 
+## Участие в разработке
+
+Проект открыт для контрибуций. Баги, идеи, PR — всё приветствуется.
+См. [CONTRIBUTING.md](CONTRIBUTING.md) для деталей.
+
 ## Лицензия
 
 MIT — см. [LICENSE](LICENSE).
