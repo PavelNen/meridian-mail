@@ -22,9 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS — универсальный бинарь (Intel + Apple Silicon)
+          # macOS ARM (Apple Silicon — M1/M2/M3/M4)
+          # Rosetta 2 позволяет запускать на Intel без перекомпиляции
           - platform: macos-latest
-            target: universal-apple-darwin
+            target: aarch64-apple-darwin
             label: macOS
 
           # Windows x64
@@ -56,12 +57,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Add macOS targets for universal binary
-        if: matrix.platform == 'macos-latest'
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
