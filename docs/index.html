@@ -201,6 +201,27 @@
 
     .why p:last-child { margin-bottom: 0; }
 
+    /* ── Contribute ── */
+    .contribute {
+      padding: 56px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .contribute h2 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--grey);
+      margin-bottom: 14px;
+    }
+
+    .contribute p {
+      font-size: 15px;
+      color: var(--grey);
+      max-width: 480px;
+    }
+
     /* ── Footer ── */
     footer {
       padding: 40px 0;
@@ -305,6 +326,25 @@
           <span>Нативный десктоп на Tauri + Rust. Лёгкий бинарь, системные шрифты.</span></p>
         </li>
       </ul>
+    </section>
+
+    <section class="contribute">
+      <h2>Обратная связь</h2>
+      <p>Проект открытый и в активной разработке. Если что-то не работает или есть идея — напишите прямо на GitHub, это занимает две минуты.</p>
+      <div class="btn-group" style="margin-top: 20px;">
+        <a class="btn" href="https://github.com/PavelNen/meridian-mail/issues/new?template=bug_report.md">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Сообщить о баге
+        </a>
+        <a class="btn" href="https://github.com/PavelNen/meridian-mail/issues/new?template=feature_request.md">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Предложить идею
+        </a>
+      </div>
     </section>
 
     <section class="why">
