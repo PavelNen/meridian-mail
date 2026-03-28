@@ -82,6 +82,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Ad-hoc подпись для macOS ARM — без неё arm64 бинари
+          # показывают "damaged" вместо "unidentified developer"
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Meridian Mail ${{ github.ref_name }}'
