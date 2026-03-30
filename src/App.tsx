@@ -10,14 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { 
-  Mail, 
-  RefreshCw, 
-  User, 
-  Plus, 
+import {
+  Mail,
+  RefreshCw,
+  User,
+  Plus,
   SendHorizontal,
   Trash2,
   X,
+  Loader2,
+  Check,
+  AlertCircle,
 } from "lucide-react";
 import {
   listAccounts,
@@ -78,6 +81,7 @@ export default function App() {
   const [showDialogInfo, setShowDialogInfo] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -246,21 +250,58 @@ export default function App() {
     }
   }, []);
 
-  const handleDeleteConversation = useCallback(async (conversationId: number) => {
-    try {
-      await deleteConversation(conversationId);
-      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
-      if (selectedConversationId === conversationId) {
-        setSelectedConversationId(null);
-        setMessages([]);
-      }
-    } catch (err) {
-      console.error("Failed to delete conversation", err);
+  const handleDeleteConversation = useCallback((conversationId: number) => {
+    const conv = conversations.find((c) => c.id === conversationId);
+    if (!conv) return;
+
+    // Немедленно убираем из списка и сбрасываем выбор
+    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+    if (selectedConversationId === conversationId) {
+      setSelectedConversationId(null);
+      setMessages([]);
     }
-  }, [selectedConversationId]);
+
+    // Показываем тост «Удаление...»
+    setDeleteToasts((prev) => [
+      ...prev,
+      { id: conversationId, name: conv.displayName ?? "Диалог", status: "deleting" },
+    ]);
+
+    // Фоновое удаление на IMAP
+    void deleteConversation(conversationId)
+      .then(() => {
+        setDeleteToasts((prev) =>
+          prev.map((t) => (t.id === conversationId ? { ...t, status: "done" } : t))
+        );
+        setTimeout(() => {
+          setDeleteToasts((prev) => prev.filter((t) => t.id !== conversationId));
+        }, 1500);
+      })
+      .catch((err) => {
+        console.error("Failed to delete conversation", err);
+        // Возвращаем диалог обратно
+        setConversations((prev) =>
+          [...prev, conv].sort(
+            (a, b) =>
+              new Date(b.lastMessageAt ?? 0).getTime() -
+              new Date(a.lastMessageAt ?? 0).getTime()
+          )
+        );
+        setDeleteToasts((prev) =>
+          prev.map((t) => (t.id === conversationId ? { ...t, status: "error" } : t))
+        );
+        setTimeout(() => {
+          setDeleteToasts((prev) => prev.filter((t) => t.id !== conversationId));
+        }, 3000);
+      });
+  }, [selectedConversationId, conversations]);
 
   // Conversation context menu state
   const [convContextMenu, setConvContextMenu] = useState<{ x: number; y: number; conversationId: number } | null>(null);
+
+  // Тосты фонового удаления
+  type DeleteToast = { id: number; name: string; status: "deleting" | "done" | "error" };
+  const [deleteToasts, setDeleteToasts] = useState<DeleteToast[]>([]);
 
   useEffect(() => {
     if (!convContextMenu) return;
@@ -294,12 +335,15 @@ export default function App() {
       inReplyToMessageId: messages[messages.length - 1]?.messageId ?? undefined,
     };
 
+    setSendError(null);
     try {
       const sent = await sendMessage(selectedAccountId, payload);
       setMessages((current) => [...current, sent]);
       setDraft("");
       await loadConversations(selectedAccountId);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setSendError(msg);
       console.error("Failed to send message", error);
     }
   };
@@ -665,7 +709,7 @@ export default function App() {
                             className="pr-12 h-10 rounded-lg bg-muted/40 border-none text-sm focus-visible:ring-1 focus-visible:ring-foreground/20"
                             value={draft}
                             disabled={!selectedAccountId || messagesState === "loading"}
-                            onChange={(event) => setDraft(event.target.value)}
+                            onChange={(event) => { setDraft(event.target.value); setSendError(null); }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" && !event.shiftKey) {
                                 event.preventDefault();
@@ -684,7 +728,11 @@ export default function App() {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-[10px] text-muted-foreground/50 mt-1.5 text-center">IMAP/SMTP · без сквозного шифрования</p>
+                      {sendError ? (
+                        <p className="text-[11px] text-destructive mt-1.5 text-center truncate" title={sendError}>{sendError}</p>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground/50 mt-1.5 text-center">IMAP/SMTP · без сквозного шифрования</p>
+                      )}
                     </div>
                   </div>
 
@@ -709,6 +757,42 @@ export default function App() {
 
       {/* Conversation context menu */}
       <AnimatePresence>
+        {/* Тосты фонового удаления */}
+        <div className="fixed bottom-4 left-4 flex flex-col gap-2 z-50 pointer-events-none">
+          <AnimatePresence>
+            {deleteToasts.map((toast) => (
+              <motion.div
+                key={toast.id}
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className={cn(
+                  "flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm shadow-lg border",
+                  toast.status === "error"
+                    ? "bg-destructive/10 border-destructive/20 text-destructive"
+                    : "bg-background border-border text-foreground"
+                )}
+              >
+                {toast.status === "deleting" && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />
+                )}
+                {toast.status === "done" && (
+                  <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                )}
+                {toast.status === "error" && (
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                )}
+                <span className="text-muted-foreground">
+                  {toast.status === "deleting" && "Удаление диалога…"}
+                  {toast.status === "done" && "Удалено"}
+                  {toast.status === "error" && "Ошибка — диалог восстановлен"}
+                </span>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
         {convContextMenu && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
