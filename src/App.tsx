@@ -3,6 +3,11 @@ import { MessageItem } from "./components/MessageItem";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { listen } from "@tauri-apps/api/event";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -51,6 +56,21 @@ const formatTimestamp = (value?: string | Date | null, fallback = "") => {
   if (Number.isNaN(date.getTime())) return fallback;
   return format(date, "d MMM yyyy, HH:mm");
 };
+
+// Запросить разрешение на уведомления при первом запуске
+async function ensureNotificationPermission(): Promise<boolean> {
+  let granted = await isPermissionGranted();
+  if (!granted) {
+    const permission = await requestPermission();
+    granted = permission === "granted";
+  }
+  return granted;
+}
+
+async function notifyNewMessage(senderName: string) {
+  if (!(await ensureNotificationPermission())) return;
+  sendNotification({ title: "Meridian Mail", body: `Новое сообщение от ${senderName}` });
+}
 
 const formatTime = (value?: string | null, fallback = "") => {
   if (!value) return fallback;
@@ -211,7 +231,19 @@ export default function App() {
   useEffect(() => {
     const unlisten = listen("db-updated", () => {
       if (selectedAccountId) {
-        void loadConversations(selectedAccountId);
+        const prevConvs = conversations;
+        void loadConversations(selectedAccountId).then((next) => {
+          if (!next) return;
+          // Найти диалоги у которых вырос unreadCount
+          for (const conv of next) {
+            const prev = prevConvs.find((c) => c.id === conv.id);
+            const isNew = !prev;
+            const hasMoreUnread = prev && conv.unreadCount > prev.unreadCount;
+            if ((isNew || hasMoreUnread) && conv.unreadCount > 0) {
+              void notifyNewMessage(conv.displayName ?? conv.id.toString());
+            }
+          }
+        });
       }
       if (selectedConversationId) {
         void loadMessages(selectedConversationId);
@@ -224,6 +256,7 @@ export default function App() {
   }, [
     selectedAccountId,
     selectedConversationId,
+    conversations,
     loadConversations,
     loadMessages,
   ]);
@@ -240,6 +273,11 @@ export default function App() {
       });
     }
   }, [selectedAccountId]);
+
+  // Запрашиваем разрешение на уведомления при старте
+  useEffect(() => {
+    void ensureNotificationPermission();
+  }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: number) => {
     try {

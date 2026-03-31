@@ -273,15 +273,43 @@ pub async fn start_idle_sync(
 ) -> Result<(), String> {
     use tauri::Emitter;
 
-    let (acc, creds) = load_account_and_creds(&state, account_id).await?;
+    // Validate that the account exists and credentials are accessible right now.
+    let (acc, _) = load_account_and_creds(&state, account_id).await?;
     let db_arc = state.db.clone();
 
     tokio::spawn(async move {
         log::info!("Starting polling sync for account {}", acc.email);
         // Initial short delay to let the app finish loading.
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
         loop {
+            // Re-read password from Keychain on every iteration so that
+            // re-added accounts (new password) are picked up automatically,
+            // and stale workers self-terminate when the account is removed.
+            let password = match crate::keychain::get_password(&acc.email) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::warn!("Poll: Keychain error for {} — stopping worker: {e}", acc.email);
+                    break;
+                }
+            };
+
+            // Verify the account still exists in DB (not deleted by user).
+            let account_still_exists = {
+                let db = db_arc.lock().await;
+                db.get_account(account_id).is_ok()
+            };
+            if !account_still_exists {
+                log::info!("Poll: account {} removed — stopping worker", acc.email);
+                break;
+            }
+
+            let creds = crate::models::Credentials {
+                account_id,
+                username: acc.email.clone(),
+                password,
+            };
+
             log::debug!("Poll: syncing inbox for {}", acc.email);
 
             let client = ImapClient::new(acc.clone());
